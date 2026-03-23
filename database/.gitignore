@@ -15,3 +15,7 @@ composer.lock
 
 # Carpeta en cualquier nivel del proyecto
 logs/
+
+estructura_codigo.txt
+
+export_code.ps1
