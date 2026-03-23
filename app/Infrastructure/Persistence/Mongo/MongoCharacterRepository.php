@@ -13,7 +13,7 @@ class MongoCharacterRepository implements CharacterRepositoryInterface
 
     public function findAll(): array
     {
-        // ELIMINAMOS ->toArray() de aquí para mantenerlo como Colección y poder usar map()
+
         $documents = DB::connection($this->connection)
             ->table($this->collection)
             ->get();
