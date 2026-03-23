@@ -1,0 +1,17 @@
+# Archivos específicos
+.env
+.env.backup
+composer.lock
+
+# Extensiones (cualquier archivo con esa extensión)
+*.sqlite*
+*.log
+*.zip
+
+# Carpetas (con o sin slash final, pero con slash es más explícito)
+/vendor/
+/node_modules/
+/storage/logs/
+
+# Carpeta en cualquier nivel del proyecto
+logs/
