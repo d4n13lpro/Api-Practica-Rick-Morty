@@ -186,5 +186,7 @@ return [
         ],
 
     ],
+    'character_source' => env('DB_SOURCE', 'mongo'),
+
 
 ];
