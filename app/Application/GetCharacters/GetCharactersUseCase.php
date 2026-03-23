@@ -2,6 +2,7 @@
 
 namespace App\Application\GetCharacters;
 
+use App\Domain\Characters\Contracts\CharacterQueryRepository;
 use App\Domain\Characters\Contracts\CharacterRepositoryInterface;
 
 
@@ -12,7 +13,7 @@ class GetCharactersUseCase
      * Esto hace que nuestro caso de uso sea agnóstico a la fuente de datos.
      */
     public function __construct(
-        private CharacterRepositoryInterface $repository
+        private CharacterQueryRepository $repository
     ) {}
 
     /**

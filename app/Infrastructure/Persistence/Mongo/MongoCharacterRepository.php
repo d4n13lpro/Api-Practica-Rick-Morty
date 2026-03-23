@@ -2,47 +2,72 @@
 
 namespace App\Infrastructure\Persistence\Mongo;
 
-use App\Domain\Characters\Contracts\CharacterRepositoryInterface;
-use App\Domain\Characters\Entities\Character;
-use Illuminate\Support\Facades\DB;
 
-class MongoCharacterRepository implements CharacterRepositoryInterface
+use App\Domain\Characters\Entities\Character;
+use Illuminate\Database\Connection;
+
+use App\Domain\Characters\Contracts\CharacterQueryRepository;
+use App\Domain\Characters\Contracts\CharacterCommandRepository;
+
+class MongoCharacterRepository implements
+    CharacterQueryRepository,
+    CharacterCommandRepository
 {
-    private string $connection = 'mongodb';
+    // 🔌 Infra pura (configurable, no hardcodeado a Facade)
     private string $collection = 'characters';
+
+    public function __construct(
+        private Connection $db // ✅ Inyección → testeable
+    ) {}
 
     public function findAll(): array
     {
-
-        $documents = DB::connection($this->connection)
+        // 🔄 Infra → Domain (via Mapper)
+        $documents = $this->db
             ->table($this->collection)
             ->get();
 
-        return $documents->map(function ($doc) {
-            // Ahora $doc es un objeto stdClass, por eso usamos ->
-            return new Character(
-                id: (int) $doc->id,
-                name: (string) $doc->name,
-                status: (string) $doc->status,
-                species: (string) $doc->species,
-                image: (string) $doc->image
-            );
-        })->all(); // .all() convierte la colección final en el array que pide el contrato
+        return $documents
+            ->map(fn($doc) => $this->toDomain($doc))
+            ->all();
     }
 
     public function save(Character $character): void
     {
-        DB::connection($this->connection)
+        // 🔄 Domain → Infra (via Mapper)
+        $this->db
             ->table($this->collection)
             ->updateOrInsert(
-                ['id' => $character->id],
-                [
-                    'name' => $character->name,
-                    'status' => $character->status,
-                    'species' => $character->species,
-                    'image' => $character->image,
-                    'synced_at' => now(),
-                ]
+                ['id' => $character->id], // 🔑 identidad
+                $this->toPersistence($character)
             );
+    }
+
+    // =========================
+    // 🔁 MAPPER (centralizado)
+    // =========================
+
+    private function toDomain(object $doc): Character
+    {
+        // 🛡️ Protección básica ante cambios de schema
+        return new Character(
+            id: (int) ($doc->id ?? 0),
+            name: (string) ($doc->name ?? ''),
+            status: (string) ($doc->status ?? ''),
+            species: (string) ($doc->species ?? ''),
+            image: (string) ($doc->image ?? '')
+        );
+    }
+
+    private function toPersistence(Character $character): array
+    {
+        return [
+            'id' => $character->id,
+            'name' => $character->name,
+            'status' => $character->status,
+            'species' => $character->species,
+            'image' => $character->image,
+            'synced_at' => now(), // ⏱️ técnico (correcto aquí)
+        ];
     }
 }
