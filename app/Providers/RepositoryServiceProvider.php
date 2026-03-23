@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 // IMPORTANTE: Verifica que estas rutas (namespaces) coincidan con tus carpetas
 use App\Domain\Characters\Contracts\CharacterRepositoryInterface;
 use App\Infrastructure\ExternalApis\RickAndMorty\RickAndMortyRepository;
+use App\Infrastructure\Persistence\Mongo\MongoCharacterRepository;
 
 class RepositoryServiceProvider extends ServiceProvider
 {
@@ -16,7 +17,8 @@ class RepositoryServiceProvider extends ServiceProvider
     {
         $this->app->bind(
             CharacterRepositoryInterface::class,
-            RickAndMortyRepository::class
+            // RickAndMortyRepository::class,
+            MongoCharacterRepository::class,
         );
     }
 

@@ -40,4 +40,9 @@ class RickAndMortyRepository implements CharacterRepositoryInterface
             );
         })->all();
     }
+    public function save(Character $character): void
+    {
+        // Se deja vacío porque la API externa es de solo lectura.
+        // Solo se implementa para cumplir con CharacterRepositoryInterface.
+    }
 }
