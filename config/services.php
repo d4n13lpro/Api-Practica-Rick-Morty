@@ -35,6 +35,6 @@ return [
         ],
     ],
     'rickandmorty' => [
-        'base_url' => 'https://rickandmortyapi.com/api',
+        'base_url' => env('RICKANDMORTY_BASE_URL', 'https://rickandmortyapi.com/api'),
     ],
 ];

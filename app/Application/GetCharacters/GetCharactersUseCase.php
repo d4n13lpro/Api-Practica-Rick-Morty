@@ -3,8 +3,6 @@
 namespace App\Application\GetCharacters;
 
 use App\Domain\Characters\Contracts\CharacterQueryRepository;
-use App\Domain\Characters\Contracts\CharacterRepositoryInterface;
-
 
 class GetCharactersUseCase
 {

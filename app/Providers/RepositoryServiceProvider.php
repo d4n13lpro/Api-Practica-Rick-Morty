@@ -16,14 +16,15 @@ class RepositoryServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // 🔥 0. External API
+        // Adaptador de la API externa — recibe el cliente HTTP y la URL base desde config.
         $this->app->singleton(RickAndMortyRepository::class, function ($app) {
             return new RickAndMortyRepository(
                 $app->make(HttpFactory::class),
                 config('services.rickandmorty.base_url')
             );
         });
-        // 🔥 1. Crear UNA sola instancia del repo (shared)
+
+        // Adaptadores de persistencia — singleton garantiza una sola conexión por request.
         $this->app->singleton(MongoCharacterRepository::class, function ($app) {
             /** @var DatabaseManager $db */
             $db = $app->make('db');
@@ -36,9 +37,9 @@ class RepositoryServiceProvider extends ServiceProvider
             return new MysqlCharacterRepository($db->connection('mysql'));
         });
 
-        // 🔥 2. Resolver dinámicamente el repo activo
+        // Resuelve el repositorio activo según DB_SOURCE en .env (mysql | mongo).
+        // Registrado como alias 'character.repo' para ser compartido entre las interfaces CQRS.
         $this->app->singleton('character.repo', function ($app) {
-
             $source = config('database.character_source', 'mongo');
 
             return match ($source) {
@@ -48,18 +49,13 @@ class RepositoryServiceProvider extends ServiceProvider
             };
         });
 
-        // 🔥 3. Bind de interfaces → MISMA instancia
-        $this->app->bind(CharacterQueryRepository::class, function ($app) {
-            return $app->make('character.repo');
-        });
+        // Ambas interfaces CQRS apuntan a la misma instancia del repositorio activo.
+        $this->app->bind(CharacterQueryRepository::class, fn($app) => $app->make('character.repo'));
+        $this->app->bind(CharacterCommandRepository::class, fn($app) => $app->make('character.repo'));
 
-        $this->app->bind(CharacterCommandRepository::class, function ($app) {
-            return $app->make('character.repo');
-        });
-
-        // 🧠 Metadata (esto está bien, solo pequeño ajuste)
+        // Construye los metadatos de conexión según la fuente activa.
+        // Usado por CharacterController para exponer info de infraestructura en la respuesta.
         $this->app->singleton(CharacterMeta::class, function () {
-
             $source = config('database.character_source', 'mongo');
 
             $conn = match ($source) {
@@ -75,14 +71,13 @@ class RepositoryServiceProvider extends ServiceProvider
             return match ($source) {
                 'mysql' => new CharacterMeta(
                     source: 'mysql',
-                    host: $conn['host'] ?? 'unknown',
+                    host: $conn['host']     ?? 'unknown',
                     database: $conn['database'] ?? 'unknown',
                 ),
-
                 'mongo' => new CharacterMeta(
                     source: 'mongo',
                     database: $conn['database'] ?? 'unknown',
-                    dsn: $conn['dsn'] ?? null,
+                    dsn: $conn['dsn']      ?? null,
                 ),
             };
         });
