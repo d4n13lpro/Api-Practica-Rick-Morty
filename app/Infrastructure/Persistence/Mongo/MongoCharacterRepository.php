@@ -31,6 +31,11 @@ class MongoCharacterRepository implements
             ->map(fn($doc) => $this->toDomain($doc))
             ->all();
     }
+    public function findById(int $id): ?Character
+    {
+        $doc = $this->db->table($this->collection)->where('id', $id)->first();
+        return $doc ? $this->toDomain($doc) : null;
+    }
 
     public function save(Character $character): void
     {

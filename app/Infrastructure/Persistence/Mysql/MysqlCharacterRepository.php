@@ -27,6 +27,11 @@ class MysqlCharacterRepository implements CharacterQueryRepository, CharacterCom
             ->map(fn($row) => $this->toDomain($row))
             ->all();
     }
+    public function findById(int $id): ?Character
+    {
+        $row = $this->db->table($this->table)->find($id);
+        return $row ? $this->toDomain($row) : null;
+    }
 
     public function save(Character $character): void
     {

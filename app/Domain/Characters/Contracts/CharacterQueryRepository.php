@@ -10,4 +10,5 @@ interface CharacterQueryRepository
      * @return Character[]
      */
     public function findAll(): array;
+    public function findById(int $id): ?Character;
 }

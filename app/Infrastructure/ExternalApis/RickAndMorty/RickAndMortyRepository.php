@@ -9,61 +9,70 @@ use Illuminate\Http\Client\RequestException;
 
 class RickAndMortyRepository implements CharacterQueryRepository
 {
-    // 🔌 Infra configurable (desacoplado de hardcode)
+    // Infra configurable — baseUrl inyectado desde config/services.php via RepositoryServiceProvider.
     public function __construct(
         private HttpFactory $http,
-        private string $baseUrl // ← inyectar desde config/services.php
+        private string $baseUrl
     ) {}
 
     public function findAll(): array
     {
         try {
-            // 🌐 Cliente HTTP limpio (sin hacks inseguros)
             $response = $this->http
                 ->baseUrl($this->baseUrl)
                 ->acceptJson()
                 ->get('/character')
-                ->throw(); // 🛑 lanza excepción si falla (fail fast)
-
+                ->throw();
         } catch (RequestException $e) {
-            // ❌ Infra error explícito (no silencioso)
-            throw new \RuntimeException(
-                'RickAndMorty API request failed',
-                previous: $e
-            );
+            throw new \RuntimeException('RickAndMorty API request failed', previous: $e);
         }
 
         $data = $response->json();
 
-        // 🛡️ Validación del contrato externo
         if (!isset($data['results']) || !is_array($data['results'])) {
             throw new \UnexpectedValueException('Invalid API response structure');
         }
 
-        // 🔄 Infra → Domain (mapper centralizado)
         return collect($data['results'])
             ->map(fn(array $item) => $this->toDomain($item))
             ->all();
     }
 
+    // La API expone un endpoint directo por ID — no necesitamos cargar todos los personajes.
+    public function findById(int $id): ?Character
+    {
+        try {
+            $response = $this->http
+                ->baseUrl($this->baseUrl)
+                ->acceptJson()
+                ->get("/character/{$id}")
+                ->throw();
+        } catch (RequestException $e) {
+            // 404 significa que el personaje no existe — retornamos null en lugar de lanzar.
+            if ($e->response->status() === 404) {
+                return null;
+            }
+            throw new \RuntimeException('RickAndMorty API request failed', previous: $e);
+        }
+
+        return $this->toDomain($response->json());
+    }
+
+    // Read-only adapter — save() no aplica en esta fuente.
     public function save(Character $character): void
     {
-        // 🚫 Read-only adapter → comportamiento explícito
         throw new \LogicException('RickAndMortyRepository is read-only');
     }
 
-    // =========================
-    // 🔁 MAPPER (centralizado)
-    // =========================
-
+    // Mapper centralizado — convierte el array de la API en una Entidad de dominio.
     private function toDomain(array $item): Character
     {
         return new Character(
-            id: (int) ($item['id'] ?? 0),
-            name: (string) ($item['name'] ?? ''),
-            status: (string) ($item['status'] ?? ''),
+            id: (int)    ($item['id']      ?? 0),
+            name: (string) ($item['name']    ?? ''),
+            status: (string) ($item['status']  ?? ''),
             species: (string) ($item['species'] ?? ''),
-            image: (string) ($item['image'] ?? '')
+            image: (string) ($item['image']   ?? '')
         );
     }
 }
