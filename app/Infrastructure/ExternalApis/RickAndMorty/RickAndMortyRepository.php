@@ -2,12 +2,12 @@
 
 namespace App\Infrastructure\ExternalApis\RickAndMorty;
 
-use App\Domain\Characters\Contracts\CharacterRepositoryInterface;
+use App\Domain\Characters\Contracts\CharacterQueryRepository;
 use App\Domain\Characters\Entities\Character;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\RequestException;
 
-class RickAndMortyRepository implements CharacterRepositoryInterface
+class RickAndMortyRepository implements CharacterQueryRepository
 {
     // 🔌 Infra configurable (desacoplado de hardcode)
     public function __construct(

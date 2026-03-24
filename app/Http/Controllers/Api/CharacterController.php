@@ -7,7 +7,7 @@ use App\Application\GetCharacters\GetCharactersUseCase;
 use App\Infrastructure\Support\CharacterMeta;
 use App\Http\Resources\CharacterResource;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
 
 class CharacterController extends Controller
 {
