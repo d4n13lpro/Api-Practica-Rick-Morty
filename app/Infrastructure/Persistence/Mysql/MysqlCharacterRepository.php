@@ -2,7 +2,6 @@
 
 namespace App\Infrastructure\Persistence\Mysql;
 
-
 use App\Domain\Characters\Entities\Character;
 use Illuminate\Database\Connection;
 use App\Domain\Characters\Contracts\CharacterQueryRepository;
@@ -27,6 +26,7 @@ class MysqlCharacterRepository implements CharacterQueryRepository, CharacterCom
             ->map(fn($row) => $this->toDomain($row))
             ->all();
     }
+
     public function findById(int $id): ?Character
     {
         $row = $this->db->table($this->table)->find($id);
@@ -36,12 +36,23 @@ class MysqlCharacterRepository implements CharacterQueryRepository, CharacterCom
     public function save(Character $character): void
     {
         // 🔄 Domain → Infra (via Mapper)
-        $this->db
+        $exists = $this->db
             ->table($this->table)
-            ->updateOrInsert(
-                ['id' => $character->id], // 🔑 identidad
-                $this->toPersistence($character)
-            );
+            ->where('id', $character->id)
+            ->exists();
+
+        if ($exists) {
+            // ✅ Solo actualiza campos de datos + updated_at
+            $this->db
+                ->table($this->table)
+                ->where('id', $character->id)
+                ->update($this->toUpdate($character));
+        } else {
+            // ✅ Inserta con created_at y updated_at
+            $this->db
+                ->table($this->table)
+                ->insert($this->toInsert($character));
+        }
     }
 
     // =========================
@@ -59,21 +70,27 @@ class MysqlCharacterRepository implements CharacterQueryRepository, CharacterCom
         );
     }
 
-    private function toPersistence(Character $character): array
+    private function toInsert(Character $character): array
     {
-        $now = now();
-
         return [
-            'id' => $character->id,
-            'name' => $character->name,
-            'status' => $character->status,
-            'species' => $character->species,
-            'image' => $character->image,
+            'id'         => $character->id,
+            'name'       => $character->name,
+            'status'     => $character->status,
+            'species'    => $character->species,
+            'image'      => $character->image,
+            'created_at' => now(), // ✅ solo al crear
+            'updated_at' => now(),
+        ];
+    }
 
-            // ⏱️ Manejo correcto de timestamps
-            // ⚠️ updateOrInsert no distingue create/update → esto es workaround
-            'created_at' => $now,
-            'updated_at' => $now,
+    private function toUpdate(Character $character): array
+    {
+        return [
+            'name'       => $character->name,
+            'status'     => $character->status,
+            'species'    => $character->species,
+            'image'      => $character->image,
+            'updated_at' => now(), // ✅ solo updated_at al actualizar
         ];
     }
 }

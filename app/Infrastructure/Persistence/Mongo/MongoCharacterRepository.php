@@ -2,10 +2,8 @@
 
 namespace App\Infrastructure\Persistence\Mongo;
 
-
 use App\Domain\Characters\Entities\Character;
 use Illuminate\Database\Connection;
-
 use App\Domain\Characters\Contracts\CharacterQueryRepository;
 use App\Domain\Characters\Contracts\CharacterCommandRepository;
 
@@ -31,6 +29,7 @@ class MongoCharacterRepository implements
             ->map(fn($doc) => $this->toDomain($doc))
             ->all();
     }
+
     public function findById(int $id): ?Character
     {
         $doc = $this->db->table($this->collection)->where('id', $id)->first();
@@ -40,12 +39,23 @@ class MongoCharacterRepository implements
     public function save(Character $character): void
     {
         // 🔄 Domain → Infra (via Mapper)
-        $this->db
+        $exists = $this->db
             ->table($this->collection)
-            ->updateOrInsert(
-                ['id' => $character->id], // 🔑 identidad
-                $this->toPersistence($character)
-            );
+            ->where('id', $character->id)
+            ->exists();
+
+        if ($exists) {
+            // ✅ Solo actualiza campos de datos + synced_at
+            $this->db
+                ->table($this->collection)
+                ->where('id', $character->id)
+                ->update($this->toUpdate($character));
+        } else {
+            // ✅ Inserta con created_at y synced_at
+            $this->db
+                ->table($this->collection)
+                ->insert($this->toInsert($character));
+        }
     }
 
     // =========================
@@ -64,15 +74,27 @@ class MongoCharacterRepository implements
         );
     }
 
-    private function toPersistence(Character $character): array
+    private function toInsert(Character $character): array
     {
         return [
-            'id' => $character->id,
-            'name' => $character->name,
-            'status' => $character->status,
-            'species' => $character->species,
-            'image' => $character->image,
-            'synced_at' => now(), // ⏱️ técnico (correcto aquí)
+            'id'         => $character->id,
+            'name'       => $character->name,
+            'status'     => $character->status,
+            'species'    => $character->species,
+            'image'      => $character->image,
+            'created_at' => now(), // ✅ solo al crear
+            'synced_at'  => now(), // ⏱️ técnico
+        ];
+    }
+
+    private function toUpdate(Character $character): array
+    {
+        return [
+            'name'      => $character->name,
+            'status'    => $character->status,
+            'species'   => $character->species,
+            'image'     => $character->image,
+            'synced_at' => now(), // ✅ se actualiza en cada sync
         ];
     }
 }
