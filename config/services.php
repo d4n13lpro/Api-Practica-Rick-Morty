@@ -35,7 +35,6 @@ return [
         ],
     ],
     'rickandmorty' => [
-        'base_url' => env('RICK_AND_MORTY_BASE_URL', 'https://rickandmortyapi.com/api'),
-        'timeout' => env('RICK_AND_MORTY_TIMEOUT', 5),
+        'base_url' => 'https://rickandmortyapi.com/api',
     ],
 ];

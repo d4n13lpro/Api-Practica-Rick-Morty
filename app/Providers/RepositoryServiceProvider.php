@@ -9,11 +9,20 @@ use App\Infrastructure\Persistence\Mysql\MysqlCharacterRepository;
 use App\Infrastructure\Support\CharacterMeta;
 use App\Domain\Characters\Contracts\CharacterQueryRepository;
 use App\Domain\Characters\Contracts\CharacterCommandRepository;
+use App\Infrastructure\ExternalApis\RickAndMorty\RickAndMortyRepository;
+use Illuminate\Http\Client\Factory as HttpFactory;
 
 class RepositoryServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // 🔥 0. External API
+        $this->app->singleton(RickAndMortyRepository::class, function ($app) {
+            return new RickAndMortyRepository(
+                $app->make(HttpFactory::class),
+                config('services.rickandmorty.base_url')
+            );
+        });
         // 🔥 1. Crear UNA sola instancia del repo (shared)
         $this->app->singleton(MongoCharacterRepository::class, function ($app) {
             /** @var DatabaseManager $db */
