@@ -20,7 +20,7 @@ class GetCharacterByIdController extends Controller
         $character = $this->useCase->execute($id);
 
         if (!$character) {
-            return response()->json(['error' => 'Character not found'], 404);
+            return response()->json(['error' => 'El personaje no existe'], 404);
         }
 
         return response()->json([
