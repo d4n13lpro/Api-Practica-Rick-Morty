@@ -1,6 +1,7 @@
-# API Practice — Laravel 12 + DDD + Arquitectura Hexagonal
+# Api-Practica-Rick-Morty
 
-> Integración con la API pública de Rick & Morty usando Domain-Driven Design y Arquitectura Hexagonal en Laravel 12.
+> API REST con Laravel 12, DDD, Arquitectura Hexagonal y patrón CQRS.
+> Consume la API pública de Rick & Morty y soporta múltiples motores de persistencia (MySQL / MongoDB) intercambiables con un solo cambio de configuración.
 
 **Stack:** PHP 8.2 · Laravel 12 · MySQL · MongoDB · XAMPP
 
@@ -13,74 +14,63 @@
 3. [Instalación paso a paso](#3-instalación-paso-a-paso)
 4. [Secuencia completa de comandos — Laravel 12](#4-secuencia-completa-de-comandos--laravel-12)
 5. [Estructura de carpetas](#5-estructura-de-carpetas)
-6. [Teoría: DDD y Arquitectura Hexagonal](#6-teoría-ddd-y-arquitectura-hexagonal)
+6. [Arquitectura — DDD + Hexagonal + CQRS](#6-arquitectura--ddd--hexagonal--cqrs)
 7. [Explicación de cada archivo](#7-explicación-de-cada-archivo)
-8. [Inversión de Dependencias](#8-inversión-de-dependencias)
-9. [Comandos de referencia](#9-comandos-de-referencia)
+8. [Cambiar la fuente de datos](#8-cambiar-la-fuente-de-datos)
+9. [Configuración de MongoDB](#9-configuración-de-mongodb)
 10. [Endpoints de la API](#10-endpoints-de-la-api)
-11. [Cómo cambiar la fuente de datos](#11-cómo-cambiar-la-fuente-de-datos)
+11. [Comandos de referencia](#11-comandos-de-referencia)
 12. [Principios SOLID aplicados](#12-principios-solid-aplicados)
-13. [Qué sigue](#13-qué-sigue)
-14. [Errores comunes](#14-errores-comunes)
-15. [.gitignore recomendado](#15-gitignore-recomendado)
-16. [Glosario](#16-glosario)
+13. [Errores comunes](#13-errores-comunes)
+14. [.gitignore recomendado](#14-gitignore-recomendado)
+15. [Glosario](#15-glosario)
 
 ---
 
 ## 1. ¿Qué es este proyecto?
 
-Este proyecto es una API REST construida con Laravel 12 que consume la API pública de Rick & Morty, sincroniza los personajes en MongoDB (o MySQL), y los expone mediante un endpoint propio. Su propósito principal no es el producto en sí, sino aprender a estructurar código PHP con los patrones más demandados en la industria:
+Este proyecto es una API REST en Laravel 12 que integra la API pública de Rick & Morty y permite persistir los personajes en **MySQL o MongoDB**, intercambiables sin tocar una sola línea de lógica de negocio.
 
-- **Domain-Driven Design (DDD):** organizar el código alrededor del negocio, no alrededor del framework.
-- **Arquitectura Hexagonal (Ports & Adapters):** aislar la lógica de negocio de los detalles técnicos (HTTP, bases de datos, APIs externas).
-- **Inversión de Dependencias:** el dominio no depende de la infraestructura; la infraestructura depende del dominio.
+Los patrones implementados:
+
+- **DDD (Domain-Driven Design):** el código se organiza alrededor del dominio, no del framework.
+- **Arquitectura Hexagonal (Ports & Adapters):** el núcleo de la aplicación está aislado de los detalles técnicos.
+- **CQRS (Command Query Responsibility Segregation):** lectura y escritura tienen interfaces separadas en el dominio.
+- **Inversión de Dependencias:** el dominio define contratos; la infraestructura los cumple.
 
 > **¿Por qué importa?**
-> En este proyecto ya lo viviste: empezaste con MySQL, luego migraste a MongoDB.
-> El `GetCharactersUseCase` y el `CharacterController` **no se tocaron**. Solo cambiaste el binding en `RepositoryServiceProvider`.
-> Eso es exactamente el valor de esta arquitectura.
+> Cambiar de MySQL a MongoDB no requiere tocar el Controller, el UseCase ni la Entidad.
+> Solo cambias `DB_SOURCE=mongo` en el `.env`. Eso es lo que hace valiosa esta arquitectura.
 
 ---
 
 ## 2. Prerequisitos
 
-| Herramienta | Versión mínima                    |
-| ----------- | --------------------------------- |
-| XAMPP       | PHP 8.2+, Apache, MySQL 5.7+      |
-| Composer    | v2.x                              |
-| Git         | Cualquier versión reciente        |
-| PHP CLI     | Debe estar en el PATH del sistema |
-| MongoDB     | v6+ (Community Edition)           |
-| Driver PHP  | `mongodb` extension para PHP      |
+| Herramienta | Versión mínima / Notas                  |
+| ----------- | --------------------------------------- |
+| XAMPP       | PHP 8.2+, Apache, MySQL 5.7+            |
+| Composer    | v2.x                                    |
+| Git         | Cualquier versión reciente              |
+| PHP CLI     | Debe estar en el PATH del sistema       |
+| MongoDB     | Instancia local o Atlas (si usas mongo) |
+| ext-mongodb | DLL instalada en XAMPP (ver sección 9)  |
 
-### Verificar que PHP está en el PATH (Windows)
+### Verificar PHP en el PATH (Windows)
 
 ```bash
 php -v
 composer -V
 ```
 
-Si PHP no se reconoce, agrega al PATH: `C:\xampp\php`
+Si PHP no se reconoce, agrega `C:\xampp\php` al PATH del sistema:
 
-> Panel de Control → Sistema → Variables de entorno → Path → Nueva → `C:\xampp\php`
-
-### Verificar que el driver de MongoDB está activo
-
-```bash
-php -m | findstr mongodb
-```
-
-Si no aparece, descarga el driver desde [pecl.php.net/package/mongodb](https://pecl.php.net/package/mongodb) y agrégalo a `php.ini`:
-
-```ini
-extension=mongodb
-```
+> Panel de Control → Sistema → Variables de entorno → Path → Nueva
 
 ---
 
 ## 3. Instalación paso a paso
 
-### Paso 1 — Crear el proyecto Laravel
+### Paso 1 — Crear el proyecto
 
 ```bash
 cd C:\xampp\htdocs
@@ -88,25 +78,17 @@ composer create-project laravel/laravel api-practice
 cd api-practice
 ```
 
-### Paso 2 — Instalar el paquete de MongoDB para Laravel
-
-```bash
-composer require mongodb/laravel-mongodb
-```
-
-> Este paquete registra automáticamente `MongoDBServiceProvider` y `MongoDBBusServiceProvider`. Los verás listados en `bootstrap/cache/services.php`.
-
-### Paso 3 — Configurar el entorno
+### Paso 2 — Configurar el entorno
 
 ```bash
 copy .env.example .env
 php artisan key:generate
 ```
 
-Edita `.env` con tus datos de MySQL **y** MongoDB:
+Edita `.env` con tus datos:
 
 ```env
-# MySQL (para las migraciones estándar de Laravel)
+# Base de datos MySQL
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -115,42 +97,39 @@ DB_USERNAME=root
 DB_PASSWORD=
 
 # MongoDB
-MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_URI=mongodb://localhost:27017
 MONGODB_DATABASE=api_practice
+
+# Fuente activa: mysql | mongo
+DB_SOURCE=mongo
+
+# URL de la API externa
+RICKANDMORTY_BASE_URL=https://rickandmortyapi.com/api
 ```
 
-### Paso 4 — Agregar la conexión MongoDB en `config/database.php`
-
-```php
-'connections' => [
-    // ... mysql, sqlite, etc.
-
-    'mongodb' => [
-        'driver'   => 'mongodb',
-        'dsn'      => env('MONGODB_URI', 'mongodb://127.0.0.1:27017'),
-        'database' => env('MONGODB_DATABASE', 'api_practice'),
-    ],
-],
-```
-
-### Paso 5 — Crear la base de datos MySQL
+### Paso 3 — Crear la base de datos MySQL
 
 ```sql
--- Desde phpMyAdmin o MySQL CLI
 CREATE DATABASE api_practice CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-> MongoDB NO necesita este paso. Crea la base de datos y la colección automáticamente al primer `insert`.
-
-### Paso 6 — Instalar la API (exclusivo Laravel 12)
+### Paso 4 — Instalar la API (exclusivo Laravel 12)
 
 ```bash
 php artisan install:api
 ```
 
-> **¿Por qué este comando?** En Laravel 12, `routes/api.php` no existe por defecto. Este comando lo crea, instala Sanctum y registra el middleware de API. Sin él, obtendrás 404 en todos tus endpoints.
+> En Laravel 12 `routes/api.php` no existe por defecto. Este comando lo crea, instala Sanctum y registra el middleware de API. Sin él obtendrás 404 en todos los endpoints.
 
-### Paso 7 — Crear la estructura de carpetas DDD
+### Paso 5 — Instalar MongoDB (si lo usas)
+
+```bash
+composer require mongodb/laravel-mongodb
+```
+
+> Requiere la extensión `ext-mongodb` instalada en XAMPP. Ver [sección 9](#9-configuración-de-mongodb).
+
+### Paso 6 — Crear la estructura de carpetas DDD
 
 ```bash
 mkdir app\Domain\Characters\Contracts
@@ -159,25 +138,32 @@ mkdir app\Application\GetCharacters
 mkdir app\Infrastructure\ExternalApis\RickAndMorty
 mkdir app\Infrastructure\Persistence\Mysql
 mkdir app\Infrastructure\Persistence\Mongo
+mkdir app\Infrastructure\Support
+mkdir app\Http\Resources
 ```
 
-### Paso 8 — Crear la migración (para la tabla MySQL)
+### Paso 7 — Configurar `config/database.php`
 
-```bash
-php artisan make:migration create_characters_table
-```
-
-Edita el archivo generado en `database/migrations/`:
+Agrega la conexión MongoDB y la variable de fuente activa:
 
 ```php
-Schema::create('characters', function (Blueprint $table) {
-    $table->unsignedBigInteger('id')->primary(); // ID de la API como PK
-    $table->string('name');
-    $table->string('status');
-    $table->string('species');
-    $table->string('image');
-    $table->timestamps();
-});
+// En el array 'connections':
+'mongodb' => [
+    'driver'   => 'mongodb',
+    'dsn'      => env('MONGODB_URI', 'mongodb://localhost:27017'),
+    'database' => env('MONGODB_DATABASE', 'api_practice'),
+],
+
+// Al final del archivo, fuera de 'connections':
+'character_source' => env('DB_SOURCE', 'mongo'),
+```
+
+### Paso 8 — Configurar `config/services.php`
+
+```php
+'rickandmorty' => [
+    'base_url' => env('RICKANDMORTY_BASE_URL', 'https://rickandmortyapi.com/api'),
+],
 ```
 
 ### Paso 9 — Generar clases con Artisan
@@ -186,6 +172,7 @@ Schema::create('characters', function (Blueprint $table) {
 php artisan make:command SyncCharactersCommand
 php artisan make:provider RepositoryServiceProvider
 php artisan make:controller Api/CharacterController
+php artisan make:resource CharacterResource
 ```
 
 ### Paso 10 — Registrar el Service Provider
@@ -206,13 +193,15 @@ composer dump-autoload
 php artisan optimize:clear
 ```
 
-### Paso 12 — Ejecutar migraciones
+### Paso 12 — Ejecutar migraciones (solo MySQL)
 
 ```bash
 php artisan migrate
 ```
 
-### Paso 13 — Sincronizar y levantar el servidor
+> MongoDB no usa migraciones. Las colecciones se crean automáticamente al hacer el primer `save()`.
+
+### Paso 13 — Sincronizar y levantar
 
 ```bash
 php artisan characters:sync
@@ -224,25 +213,22 @@ php artisan serve
 
 ## 4. Secuencia completa de comandos — Laravel 12
 
-Copia y ejecuta en orden:
-
 ```bash
 # ── FASE 1: PROYECTO ──────────────────────────────────────────
 composer create-project laravel/laravel api-practice
 cd api-practice
 
-# ── FASE 2: PAQUETE MONGODB ───────────────────────────────────
-composer require mongodb/laravel-mongodb
-
-# ── FASE 3: ENTORNO ───────────────────────────────────────────
-copy .env.example .env        # Windows
-# cp .env.example .env        # Mac/Linux
+# ── FASE 2: ENTORNO ───────────────────────────────────────────
+copy .env.example .env
 php artisan key:generate
-# (editar .env con datos de MySQL y MongoDB)
-# (editar config/database.php para agregar conexión mongodb)
+# (editar .env con DB, MongoDB, DB_SOURCE, RICKANDMORTY_BASE_URL)
 
-# ── FASE 4: API (EXCLUSIVO LARAVEL 12) ────────────────────────
+# ── FASE 3: API (EXCLUSIVO LARAVEL 12) ────────────────────────
 php artisan install:api
+
+# ── FASE 4: MONGODB (opcional) ────────────────────────────────
+composer require mongodb/laravel-mongodb
+# (instalar ext-mongodb.dll en XAMPP si no está — ver sección 9)
 
 # ── FASE 5: MIGRACIONES ───────────────────────────────────────
 php artisan make:migration create_characters_table
@@ -255,20 +241,24 @@ mkdir app\Application\GetCharacters
 mkdir app\Infrastructure\ExternalApis\RickAndMorty
 mkdir app\Infrastructure\Persistence\Mysql
 mkdir app\Infrastructure\Persistence\Mongo
+mkdir app\Infrastructure\Support
+mkdir app\Http\Resources
 # (crear los archivos PHP en cada carpeta)
 
 # ── FASE 7: GENERAR CLASES ────────────────────────────────────
 php artisan make:command SyncCharactersCommand
 php artisan make:provider RepositoryServiceProvider
 php artisan make:controller Api/CharacterController
+php artisan make:resource CharacterResource
 # (registrar RepositoryServiceProvider en bootstrap/providers.php)
+# (configurar config/database.php y config/services.php)
 
 # ── FASE 8: LIMPIAR CACHE ─────────────────────────────────────
 composer dump-autoload
 php artisan optimize:clear
 
 # ── FASE 9: BASE DE DATOS ─────────────────────────────────────
-php artisan migrate
+php artisan migrate   # solo si usas MySQL
 
 # ── FASE 10: DATOS Y SERVIDOR ─────────────────────────────────
 php artisan characters:sync
@@ -283,119 +273,145 @@ php artisan serve
 ```
 api-practice/
 ├── app/
-│   ├── Domain/                         ← NÚCLEO. Sin dependencias externas.
+│   ├── Domain/                              ← NÚCLEO. PHP puro, sin dependencias externas.
 │   │   └── Characters/
 │   │       ├── Contracts/
-│   │       │   └── CharacterRepositoryInterface.php  ← PUERTO (interfaz)
+│   │       │   ├── CharacterQueryRepository.php    ← PUERTO de lectura (CQRS)
+│   │       │   └── CharacterCommandRepository.php  ← PUERTO de escritura (CQRS)
 │   │       └── Entities/
-│   │           └── Character.php       ← ENTIDAD de dominio
+│   │           └── Character.php           ← ENTIDAD de dominio (readonly)
 │   │
-│   ├── Application/                    ← CASOS DE USO. Orquesta el dominio.
+│   ├── Application/                         ← CASOS DE USO. Orquesta el dominio.
 │   │   └── GetCharacters/
 │   │       └── GetCharactersUseCase.php
 │   │
-│   ├── Infrastructure/                 ← ADAPTADORES. Implementaciones concretas.
+│   ├── Infrastructure/                      ← ADAPTADORES. Implementaciones concretas.
 │   │   ├── ExternalApis/
 │   │   │   └── RickAndMorty/
-│   │   │       └── RickAndMortyRepository.php      ← Adaptador API externa
-│   │   └── Persistence/
-│   │       ├── Mysql/
-│   │       │   └── MysqlCharacterRepository.php    ← Adaptador MySQL
-│   │       └── Mongo/
-│   │           └── MongoCharacterRepository.php    ← Adaptador MongoDB ✅
+│   │   │       └── RickAndMortyRepository.php  ← Adaptador API externa (solo lectura)
+│   │   ├── Persistence/
+│   │   │   ├── Mysql/
+│   │   │   │   └── MysqlCharacterRepository.php   ← Adaptador MySQL (lectura + escritura)
+│   │   │   └── Mongo/
+│   │   │       └── MongoCharacterRepository.php   ← Adaptador MongoDB (lectura + escritura)
+│   │   └── Support/
+│   │       └── CharacterMeta.php           ← Metadata de la fuente activa
 │   │
-│   ├── Http/                           ← ENTRADA HTTP (Adaptador de entrada)
-│   │   └── Controllers/
-│   │       └── Api/
-│   │           └── CharacterController.php
+│   ├── Http/                                ← ADAPTADOR DE ENTRADA HTTP
+│   │   ├── Controllers/
+│   │   │   └── Api/
+│   │   │       └── CharacterController.php
+│   │   └── Resources/
+│   │       └── CharacterResource.php       ← Transformador JSON
 │   │
-│   ├── Console/                        ← ENTRADA CLI (Adaptador de entrada)
+│   ├── Console/                             ← ADAPTADOR DE ENTRADA CLI
 │   │   └── Commands/
 │   │       └── SyncCharactersCommand.php
 │   │
 │   └── Providers/
 │       ├── AppServiceProvider.php
-│       └── RepositoryServiceProvider.php  ← Conecta puertos con adaptadores
+│       └── RepositoryServiceProvider.php   ← Conecta puertos con adaptadores dinámicamente
 │
 ├── bootstrap/
 │   ├── app.php
-│   ├── providers.php
-│   └── cache/
-│       ├── packages.php   ← Cache de paquetes (autogenerado)
-│       └── services.php   ← Cache de providers (autogenerado)
+│   └── providers.php
+│
+├── config/
+│   ├── database.php                        ← Conexiones MySQL + MongoDB + character_source
+│   └── services.php                        ← URL de la API externa
 │
 ├── database/
 │   └── migrations/
-│       ├── xxxx_create_users_table.php
-│       ├── xxxx_create_cache_table.php
-│       ├── xxxx_create_jobs_table.php
-│       ├── xxxx_create_personal_access_tokens_table.php
 │       └── xxxx_create_characters_table.php
 │
 └── routes/
-    ├── api.php      ← Rutas de la API REST
-    ├── web.php      ← Ruta web raíz
-    └── console.php  ← Comandos de Artisan vía closures
+    └── api.php
 ```
 
 ---
 
-## 6. Teoría: DDD y Arquitectura Hexagonal
+## 6. Arquitectura — DDD + Hexagonal + CQRS
 
-### 6.1 Domain-Driven Design (DDD)
+### 6.1 Las tres capas de DDD
 
-DDD es una filosofía de diseño creada por Eric Evans. Su idea central: **organiza tu código alrededor del problema de negocio, no alrededor del framework o la base de datos.**
+| Capa             | Responsabilidad                                                               |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `Domain`         | Modela el negocio. Entidades y contratos. **Sin imports de Laravel o MySQL.** |
+| `Application`    | Orquesta el dominio en casos de uso concretos.                                |
+| `Infrastructure` | Implementaciones técnicas: MySQL, MongoDB, HTTP externo.                      |
 
-| Capa             | Responsabilidad                                                                              |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| `Domain`         | Modela el problema de negocio. Entidades, Contratos. **NUNCA** depende de Laravel ni MySQL.  |
-| `Application`    | Orquesta el dominio para ejecutar casos de uso. Solo habla con el Domain.                    |
-| `Infrastructure` | Implementaciones concretas: MySQL, MongoDB, API externa. Depende de tecnologías específicas. |
+### 6.2 CQRS — Separación de lectura y escritura
 
-### 6.2 Arquitectura Hexagonal (Ports & Adapters)
+La evolución más importante del proyecto: en lugar de una sola interfaz `CharacterRepositoryInterface`, ahora hay **dos puertos separados**:
 
-El núcleo de tu aplicación (dominio + casos de uso) **no debe saber nada** sobre cómo llegan los datos ni cómo se guardan.
+```php
+// Solo lectura
+interface CharacterQueryRepository {
+    public function findAll(): array;
+}
 
-> **Analogía — Tomacorriente eléctrico:**
-> El tomacorriente es la **interfaz** (`CharacterRepositoryInterface`).
-> No le importa si conectas una lámpara o un televisor (MySQL, MongoDB o RickAndMorty API).
-> Solo define el contrato: "dame 110V y 2 pines".
-> El enchufe concreto (`RickAndMortyRepository`, `MysqlCharacterRepository` o `MongoCharacterRepository`) es el **adaptador**.
+// Solo escritura
+interface CharacterCommandRepository {
+    public function save(Character $character): void;
+}
+```
 
-- **Puertos (Ports):** las interfaces en `Domain/Characters/Contracts`. Definen **QUÉ** se puede hacer.
-- **Adaptadores (Adapters):** las implementaciones en `Infrastructure`. Definen **CÓMO** se hace.
+**¿Por qué separar?**
+
+- `GetCharactersUseCase` solo necesita leer → depende de `CharacterQueryRepository`.
+- `SyncCharactersCommand` solo necesita escribir → depende de `CharacterCommandRepository`.
+- `RickAndMortyRepository` es **read-only** → implementa solo `CharacterQueryRepository` y lanza `LogicException` si alguien intenta `save()`.
+- MySQL y MongoDB implementan **ambas** interfaces porque pueden leer y escribir.
 
 ### 6.3 El flujo completo de una petición HTTP
 
 ```
-HTTP GET /api/characters
-     ↓
-CharacterController             ← Adaptador de ENTRADA (HTTP)
-     ↓ llama a
-GetCharactersUseCase            ← Caso de Uso (Application)
-     ↓ usa la INTERFAZ
-CharacterRepositoryInterface    ← Puerto (Domain/Contracts)
-     ↓ resuelto en runtime por RepositoryServiceProvider como
-MongoCharacterRepository        ← Adaptador de SALIDA activo (Infrastructure)
-     ↓ retorna
-Character[]                     ← Entidades de Dominio
-     ↓
-JSON Response
+GET /api/characters
+        ↓
+CharacterController          ← Adaptador entrada HTTP
+        ↓ ejecuta
+GetCharactersUseCase         ← Caso de uso (Application)
+        ↓ usa
+CharacterQueryRepository     ← Puerto de lectura (Domain)
+        ↓ resuelto por DI según DB_SOURCE
+MysqlCharacterRepository     ← Adaptador MySQL
+  o MongoCharacterRepository ← Adaptador MongoDB
+        ↓ retorna
+Character[]                  ← Entidades de dominio
+        ↓ transformadas por
+CharacterResource            ← API Resource (Http layer)
+        ↓
+JSON Response con meta + data
 ```
 
-### 6.4 El flujo completo del comando de sincronización
+### 6.4 El flujo del comando de sincronización
 
 ```
 php artisan characters:sync
-     ↓
-SyncCharactersCommand           ← Adaptador de ENTRADA (CLI)
-     ↓ llama a
-RickAndMortyRepository          ← Adaptador API externa (inyectado directamente)
-     ↓ retorna Character[]
-     ↓ luego llama a
-CharacterRepositoryInterface    ← Puerto de persistencia
-     ↓ resuelto como
-MongoCharacterRepository        ← Guarda en MongoDB
+        ↓
+SyncCharactersCommand        ← Adaptador entrada CLI
+        ↓ lee con
+RickAndMortyRepository       ← CharacterQueryRepository (API externa)
+        ↓ persiste con
+CharacterCommandRepository   ← Resuelto como MySQL o Mongo según DB_SOURCE
+```
+
+### 6.5 Resolución dinámica en el Service Provider
+
+```php
+// Lee DB_SOURCE del .env
+$source = config('database.character_source', 'mongo');
+
+// Crea la instancia correcta
+$repo = match ($source) {
+    'mysql' => $app->make(MysqlCharacterRepository::class),
+    'mongo' => $app->make(MongoCharacterRepository::class),
+    default => throw new \InvalidArgumentException("Invalid DB_SOURCE: {$source}"),
+};
+
+// Registra la MISMA instancia para ambas interfaces
+$this->app->bind(CharacterQueryRepository::class,   fn() => $repo);
+$this->app->bind(CharacterCommandRepository::class, fn() => $repo);
 ```
 
 ---
@@ -405,7 +421,6 @@ MongoCharacterRepository        ← Guarda en MongoDB
 ### 7.1 `Character.php` — La Entidad
 
 ```php
-// app/Domain/Characters/Entities/Character.php
 readonly class Character
 {
     public function __construct(
@@ -418,333 +433,337 @@ readonly class Character
 }
 ```
 
-`readonly class` (PHP 8.2+): una vez creado el objeto, sus propiedades no pueden cambiar. Esto garantiza **inmutabilidad** — un principio fundamental de DDD.
+`readonly` garantiza inmutabilidad total. Una vez creado, no puede modificarse. PHP puro — ningún import de Laravel.
 
-> Esta clase no importa nada de Laravel, ni de Illuminate, ni de MySQL. Es PHP puro. Podrías copiarla a cualquier framework y funcionaría igual.
-
-### 7.2 `CharacterRepositoryInterface.php` — El Puerto
+### 7.2 `CharacterQueryRepository.php` — Puerto de lectura
 
 ```php
-// app/Domain/Characters/Contracts/CharacterRepositoryInterface.php
-interface CharacterRepositoryInterface
+interface CharacterQueryRepository
 {
+    /** @return Character[] */
     public function findAll(): array;
+}
+```
+
+### 7.3 `CharacterCommandRepository.php` — Puerto de escritura
+
+```php
+interface CharacterCommandRepository
+{
     public function save(Character $character): void;
 }
 ```
 
-Esta interfaz define el **contrato completo**: cualquier repositorio de personajes DEBE poder listarlos y guardarlos. No dice cómo. Solo dice qué.
-
-> **Nota importante:** tanto `findAll()` como `save()` son parte del contrato. Esto obliga a todos los adaptadores (MySQL, Mongo, incluso la API externa) a implementar los dos métodos. Cuando un adaptador no puede cumplir uno de ellos — como `RickAndMortyRepository` que es de solo lectura — lo implementa vacío con un comentario explicando el motivo.
-
-> **Regla de oro:** el dominio define los contratos. La infraestructura los cumple. Nunca al revés.
-
-### 7.3 `GetCharactersUseCase.php` — El Caso de Uso
+### 7.4 `GetCharactersUseCase.php`
 
 ```php
-// app/Application/GetCharacters/GetCharactersUseCase.php
 class GetCharactersUseCase
 {
     public function __construct(
-        private CharacterRepositoryInterface $repository  // inyecta la INTERFAZ
+        private CharacterQueryRepository $repository  // solo necesita leer
     ) {}
 
     public function execute(): array
     {
-        // Aquí en el mundo real agregarías:
-        // - Validación de permisos
-        // - Cache
-        // - Logging
-        // - Filtros de negocio
         return $this->repository->findAll();
+        // Aquí puedes agregar: permisos, cache, logging, eventos...
     }
 }
 ```
 
-Recibe `CharacterRepositoryInterface`, **no** `MongoCharacterRepository` ni ninguna implementación concreta. El UseCase no sabe de dónde vienen los datos. Eso lo decide el Service Provider.
-
-### 7.4 `RickAndMortyRepository.php` — Adaptador API Externa
+### 7.5 `RickAndMortyRepository.php` — Adaptador API externa
 
 ```php
-// app/Infrastructure/ExternalApis/RickAndMorty/RickAndMortyRepository.php
-class RickAndMortyRepository implements CharacterRepositoryInterface
+class RickAndMortyRepository implements CharacterQueryRepository
 {
-    private string $baseUrl = 'https://rickandmortyapi.com/api';
+    public function __construct(
+        private HttpFactory $http,   // inyectado, no Facade
+        private string $baseUrl      // desde config/services.php
+    ) {}
 
     public function findAll(): array
     {
-        // withoutVerifying() evita errores de certificado SSL en entornos locales
-        $response = Http::withoutVerifying()->get("{$this->baseUrl}/character");
+        $response = $this->http
+            ->baseUrl($this->baseUrl)
+            ->acceptJson()
+            ->get('/character')
+            ->throw();  // falla rápido si la API falla
 
-        if (!$response->successful()) {
-            return [];
+        if (!isset($data['results']) || !is_array($data['results'])) {
+            throw new \UnexpectedValueException('Invalid API response structure');
         }
 
-        $data = $response->json();
-
-        if (!isset($data['results'])) {
-            return [];
-        }
-
-        return collect($data['results'])->map(function (array $item) {
-            return new Character(       // convierte JSON → Entidad de Dominio
-                id: (int) $item['id'],
-                name: (string) $item['name'],
-                status: (string) $item['status'],
-                species: (string) $item['species'],
-                image: (string) $item['image'],
-            );
-        })->all();
+        return collect($data['results'])
+            ->map(fn(array $item) => $this->toDomain($item))
+            ->all();
     }
 
     public function save(Character $character): void
     {
-        // Vacío intencionalmente: la API de Rick & Morty es de solo lectura.
-        // Se implementa para cumplir con el contrato de CharacterRepositoryInterface.
-    }
-}
-```
-
-Transforma datos crudos de la API (array PHP) en objetos `Character` del dominio. Ese proceso se llama **hidratación de entidades**.
-
-### 7.5 `MysqlCharacterRepository.php` — Adaptador MySQL
-
-```php
-// app/Infrastructure/Persistence/Mysql/MysqlCharacterRepository.php
-class MysqlCharacterRepository implements CharacterRepositoryInterface
-{
-    private string $table = 'characters';
-
-    public function findAll(): array
-    {
-        return DB::table($this->table)->get()->map(function ($item) {
-            return new Character(
-                id: (int) $item->id,
-                name: (string) $item->name,
-                status: (string) $item->status,
-                species: (string) $item->species,
-                image: (string) $item->image
-            );
-        })->all();
+        throw new \LogicException('RickAndMortyRepository is read-only');
     }
 
-    public function save(Character $character): void
+    private function toDomain(array $item): Character  // mapper centralizado
     {
-        DB::table($this->table)->updateOrInsert(
-            ['id' => $character->id],      // condición: busca por este ID
-            [
-                'name'       => $character->name,
-                'status'     => $character->status,
-                'species'    => $character->species,
-                'image'      => $character->image,
-                'updated_at' => now(),
-                'created_at' => now(),
-            ]
+        return new Character(
+            id:      (int)    ($item['id']      ?? 0),
+            name:    (string) ($item['name']    ?? ''),
+            status:  (string) ($item['status']  ?? ''),
+            species: (string) ($item['species'] ?? ''),
+            image:   (string) ($item['image']   ?? ''),
         );
     }
 }
 ```
 
-`updateOrInsert()` es un **upsert**: si ya existe el registro lo actualiza, si no existe lo inserta. Así el comando `characters:sync` es seguro de ejecutar múltiples veces.
+**Mejoras clave vs versión anterior:**
 
-### 7.6 `MongoCharacterRepository.php` — Adaptador MongoDB
+- `Http::withoutVerifying()` eliminado — `HttpFactory` inyectada limpia.
+- `baseUrl` viene de `config/services.php`, no hardcodeado.
+- `.throw()` en lugar de `if (!$successful) return []` — fail fast explícito.
+- Mapper `toDomain()` extraído a método privado reutilizable.
+
+### 7.6 `MysqlCharacterRepository.php` y `MongoCharacterRepository.php`
+
+Ambos siguen el mismo patrón — implementan las dos interfaces y usan mappers centralizados:
 
 ```php
-// app/Infrastructure/Persistence/Mongo/MongoCharacterRepository.php
-class MongoCharacterRepository implements CharacterRepositoryInterface
+class MysqlCharacterRepository implements CharacterQueryRepository, CharacterCommandRepository
 {
-    private string $connection = 'mongodb';
-    private string $collection = 'characters';
+    public function __construct(
+        private Connection $db  // inyectado, no Facade DB::
+    ) {}
 
     public function findAll(): array
     {
-        $documents = DB::connection($this->connection)->table($this->collection)->get();
-
-        return $documents->map(function ($doc) {
-            return new Character(
-                id: (int) $doc['id'],
-                name: (string) $doc['name'],
-                status: (string) $doc['status'],
-                species: (string) $doc['species'],
-                image: (string) $doc['image']
-            );
-        })->all();
+        return $this->db->table($this->table)->get()
+            ->map(fn($row) => $this->toDomain($row))
+            ->all();
     }
 
     public function save(Character $character): void
     {
-        // table() es el método estándar de Laravel. El driver de MongoDB lo
-        // interpreta como colección. updateOrInsert hace upsert igual que en MySQL.
-        DB::connection($this->connection)->table($this->collection)->updateOrInsert(
+        $this->db->table($this->table)->updateOrInsert(
             ['id' => $character->id],
-            [
-                'name'      => $character->name,
-                'status'    => $character->status,
-                'species'   => $character->species,
-                'image'     => $character->image,
-                'synced_at' => now(),
-            ]
+            $this->toPersistence($character)
         );
     }
+
+    private function toDomain(object $row): Character { /* Infra → Domain */ }
+    private function toPersistence(Character $c): array { /* Domain → Infra */ }
 }
 ```
 
-> **Diferencia clave con MySQL:** fíjate que usa `DB::connection('mongodb')->table(...)` en lugar del `DB::table(...)` de siempre. Así le dices a Laravel que use la conexión MongoDB configurada en `config/database.php`.
+**Diferencia clave vs versión anterior:** se inyecta `Connection $db` en lugar de la Facade `DB::`. Esto hace los repositorios completamente **testeables con mocks**.
 
-### 7.7 `RepositoryServiceProvider.php` — El Conector
-
-```php
-// app/Providers/RepositoryServiceProvider.php
-public function register(): void
-{
-    $this->app->bind(
-        CharacterRepositoryInterface::class,   // cuando alguien pida esto...
-        MongoCharacterRepository::class        // ...dale esto (actualmente MongoDB)
-    );
-}
-```
-
-Este archivo **conecta los cables**. Le dice al contenedor de Laravel qué implementación concreta entregar cuando alguien solicita la interfaz. Cambiando una sola línea aquí puedes cambiar toda la fuente de datos de la aplicación.
-
-> **¿Por qué está registrado en `bootstrap/providers.php`?** Porque es un Service Provider propio. Laravel lo descubre al arrancar y ejecuta `register()` antes de resolver cualquier dependencia.
-
-### 7.8 `CharacterController.php` — Adaptador de Entrada HTTP
+### 7.7 `CharacterController.php`
 
 ```php
-// app/Http/Controllers/Api/CharacterController.php
 class CharacterController extends Controller
 {
     public function __construct(
-        private GetCharactersUseCase $getCharactersUseCase
+        private GetCharactersUseCase $useCase,
+        private CharacterMeta $meta          // metadata de la fuente activa
     ) {}
 
     public function __invoke(): JsonResponse
     {
-        $characters = $this->getCharactersUseCase->execute();
+        try {
+            $characters = $this->useCase->execute();
 
-        return response()->json([
-            'success' => true,
-            'data'    => $characters,
-        ]);
-    }
-}
-```
+            return response()->json([
+                'meta' => $this->buildMeta(),
+                'data' => CharacterResource::collection($characters),
+            ], 200);
 
-`__invoke()` — Controller invokable: un controller, una acción. Perfecto para el principio de Responsabilidad Única (SRP). La ruta queda registrada así:
-
-```php
-// routes/api.php
-Route::get('/characters', CharacterController::class);
-```
-
-### 7.9 `SyncCharactersCommand.php` — Adaptador de Entrada CLI
-
-```php
-// app/Console/Commands/SyncCharactersCommand.php
-class SyncCharactersCommand extends Command
-{
-    protected $signature = 'characters:sync';
-    protected $description = 'Sincroniza personajes desde la API externa hacia el motor de persistencia configurado';
-
-    public function handle(
-        RickAndMortyRepository $apiRepo,           // siempre lee de la API externa
-        CharacterRepositoryInterface $persistenceRepo  // guarda donde diga el Provider
-    ) {
-        $characters = $apiRepo->findAll();
-        // ...barra de progreso...
-        foreach ($characters as $character) {
-            $persistenceRepo->save($character);    // actualmente guarda en MongoDB
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json([
+                'meta'  => ['source' => $this->meta->source],
+                'error' => [
+                    'message' => 'Unexpected error',
+                    'details' => config('app.debug') ? $e->getMessage() : null,
+                ],
+            ], 500);
         }
     }
 }
 ```
 
-> **Punto clave de diseño:** el comando inyecta `RickAndMortyRepository` **directamente** (porque siempre quiere leer de la API externa) y `CharacterRepositoryInterface` para persistir (porque no le importa si es Mongo o MySQL — eso lo decide el Provider). Este es un ejemplo claro de usar la inyección de dependencias con propósito.
+**Novedades vs versión anterior:**
+
+- `try/catch` con `report($e)` para logs reales en producción.
+- `CharacterResource::collection()` transforma las entidades antes de enviarlas.
+- `meta` en la respuesta indica qué fuente de datos está activa.
+- `details` solo se expone en modo debug — no se filtran errores internos en producción.
+
+### 7.8 `CharacterResource.php` — Transformador JSON
+
+```php
+class CharacterResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id'      => $this->id,
+            'name'    => $this->name,
+            'status'  => $this->status,
+            'species' => $this->species,
+            'image'   => $this->image,
+        ];
+    }
+}
+```
+
+Controla exactamente qué campos ve el cliente. Si `Character` crece a 20 propiedades internas, el Resource sigue exponiendo solo estas 5.
+
+### 7.9 `CharacterMeta.php` — Metadata de infraestructura
+
+```php
+class CharacterMeta
+{
+    public function __construct(
+        public string $source,
+        public string $host = 'unknown',
+        public string $database = 'unknown',
+        public ?string $dsn = null,
+    ) {}
+}
+```
+
+Objeto simple que el Controller incluye en la respuesta para indicar qué motor está sirviendo los datos. Útil para confirmar que el cambio de `DB_SOURCE` funcionó.
+
+### 7.10 `SyncCharactersCommand.php`
+
+```php
+public function handle(
+    RickAndMortyRepository $apiRepo,
+    CharacterCommandRepository $persistenceRepo  // resuelto según DB_SOURCE
+): void {
+    try {
+        $characters = $apiRepo->findAll();
+        foreach ($characters as $character) {
+            $persistenceRepo->save($character);
+        }
+        $this->info('✅ Sincronización completada: ' . count($characters) . ' personajes procesados.');
+    } catch (\Throwable $e) {
+        report($e);
+        $this->error('❌ Error durante la sincronización.');
+        if (config('app.debug')) {
+            $this->line($e->getMessage());
+        }
+    }
+}
+```
+
+**Mejoras:** manejo de errores con `try/catch`, `report($e)` para producción, y mensaje de error condicional según modo debug.
 
 ---
 
-## 8. Inversión de Dependencias
+## 8. Cambiar la fuente de datos
 
-La **D** de SOLID: _"Los módulos de alto nivel no deben depender de módulos de bajo nivel. Ambos deben depender de abstracciones."_
+Con esta arquitectura, cambiar el motor de persistencia es **una línea en el `.env`**:
 
-```
-SIN inversión (MAL):
-  GetCharactersUseCase → MongoCharacterRepository
-  Si cambias de MongoDB a MySQL, tocas el UseCase. FRÁGIL.
+```env
+# Usar MongoDB
+DB_SOURCE=mongo
 
-CON inversión (BIEN):
-  GetCharactersUseCase → CharacterRepositoryInterface ← MongoCharacterRepository
-  Cambias el adaptador en el Provider sin tocar el UseCase. SÓLIDO.
+# Usar MySQL
+DB_SOURCE=mysql
 ```
 
-El `RepositoryServiceProvider` es quien une la abstracción con la implementación en tiempo de ejecución.
-
----
-
-## 9. Comandos de referencia
-
-### Desarrollo diario
-
-| Comando                        | Qué hace                                             |
-| ------------------------------ | ---------------------------------------------------- |
-| `php artisan serve`            | Levanta servidor en `http://localhost:8000`          |
-| `php artisan migrate`          | Ejecuta migraciones pendientes                       |
-| `php artisan migrate:fresh`    | Borra todas las tablas y re-migra                    |
-| `php artisan migrate:rollback` | Deshace la última migración                          |
-| `php artisan migrate:status`   | Muestra estado de cada migración                     |
-| `php artisan characters:sync`  | Sincroniza personajes de la API al motor configurado |
-| `php artisan route:list`       | Lista todas las rutas registradas                    |
-| `php artisan config:clear`     | Limpia cache de configuración                        |
-| `php artisan cache:clear`      | Limpia cache de la aplicación                        |
-| `php artisan route:clear`      | Limpia cache de rutas                                |
-| `php artisan optimize:clear`   | Limpia TODA la cache de una vez                      |
-| `composer dump-autoload`       | Regenera el mapa de clases de Composer               |
-| `php artisan tinker`           | REPL interactivo de Laravel                          |
-| `php artisan pail`             | Logs en tiempo real                                  |
-| `php artisan about`            | Info general del proyecto                            |
-
-### Generadores `make:`
-
-| Comando                                                    | Crea                              |
-| ---------------------------------------------------------- | --------------------------------- |
-| `php artisan make:controller NombreController --invokable` | Controller de un solo método      |
-| `php artisan make:model NombreModel`                       | Modelo Eloquent                   |
-| `php artisan make:migration nombre_migracion`              | Archivo de migración              |
-| `php artisan make:provider NombreProvider`                 | Service Provider                  |
-| `php artisan make:command NombreCommand`                   | Comando Artisan                   |
-| `php artisan make:request NombreRequest`                   | Form Request (validación)         |
-| `php artisan make:resource NombreResource`                 | API Resource (transformador JSON) |
-| `php artisan make:interface Ruta/NombreInterface`          | Interfaz PHP                      |
-| `php artisan make:class Ruta/NombreClase`                  | Clase PHP simple                  |
-| `php artisan make:test NombreTest --unit`                  | Test unitario                     |
-
-### Debugging
+Luego limpia la cache:
 
 ```bash
-# Ver rutas de la API solamente
-php artisan route:list --path=api
-
-# Verificar qué implementación está activa para la interfaz
-php artisan tinker
->>> app(App\Domain\Characters\Contracts\CharacterRepositoryInterface::class)
-
-# Ver logs en tiempo real
-php artisan pail
+php artisan optimize:clear
 ```
+
+El Controller, el UseCase y la Entidad no se tocan. El `RepositoryServiceProvider` lee `DB_SOURCE` y conecta automáticamente el adaptador correcto.
+
+### Árbol de adaptadores
+
+```
+CharacterQueryRepository (lectura)
+    ├── RickAndMortyRepository   → API externa (read-only)
+    ├── MysqlCharacterRepository → MySQL
+    └── MongoCharacterRepository → MongoDB
+
+CharacterCommandRepository (escritura)
+    ├── MysqlCharacterRepository → MySQL
+    └── MongoCharacterRepository → MongoDB
+```
+
+---
+
+## 9. Configuración de MongoDB
+
+### Paso 1 — Instalar la extensión PHP (XAMPP Windows)
+
+Ve a **https://pecl.php.net/package/mongodb** y descarga el `.zip` correcto:
+
+| Tu configuración    | Qué elegir         |
+| ------------------- | ------------------ |
+| PHP 8.2             | `8.2` en el nombre |
+| Windows 64 bits     | `x64`              |
+| XAMPP (Thread Safe) | `ts` (no `nts`)    |
+
+Ejemplo: `php_mongodb-1.21.0-8.2-ts-vs16-x64.zip`
+
+### Paso 2 — Copiar la DLL
+
+```
+C:\xampp\php\ext\php_mongodb.dll
+```
+
+### Paso 3 — Activar en `php.ini`
+
+```ini
+extension=mongodb
+```
+
+### Paso 4 — Reiniciar Apache y verificar
+
+```bash
+php -m | findstr mongodb
+```
+
+Si aparece `mongodb`, está activo.
+
+### Paso 5 — Instalar el paquete Laravel
+
+```bash
+composer require mongodb/laravel-mongodb
+```
+
+### Paso 6 — Agregar conexión en `config/database.php`
+
+```php
+'mongodb' => [
+    'driver'   => 'mongodb',
+    'dsn'      => env('MONGODB_URI', 'mongodb://localhost:27017'),
+    'database' => env('MONGODB_DATABASE', 'api_practice'),
+],
+```
+
+> MongoDB **no necesita migraciones**. Las colecciones se crean automáticamente al ejecutar `php artisan characters:sync`.
 
 ---
 
 ## 10. Endpoints de la API
 
-| Método | Ruta              | Descripción                                              |
-| ------ | ----------------- | -------------------------------------------------------- |
-| `GET`  | `/api/characters` | Retorna todos los personajes desde la fuente configurada |
+| Método | Ruta              | Descripción                                         |
+| ------ | ----------------- | --------------------------------------------------- |
+| `GET`  | `/api/characters` | Retorna todos los personajes desde la fuente activa |
 
-### Ejemplo de respuesta
+### Respuesta exitosa
 
 ```json
 {
-    "success": true,
+    "meta": {
+        "source": "mongo",
+        "database": "api_practice",
+        "dsn": "mongodb://localhost:27017"
+    },
     "data": [
         {
             "id": 1,
@@ -757,143 +776,100 @@ php artisan pail
 }
 ```
 
----
+### Respuesta de error (modo debug activo)
 
-## 11. Cómo cambiar la fuente de datos
-
-Este es el momento donde la arquitectura demuestra su valor. Solo editas **un archivo**:
-
-```php
-// app/Providers/RepositoryServiceProvider.php
-
-// OPCIÓN A — Lee y expone los datos directamente desde la API externa
-$this->app->bind(
-    CharacterRepositoryInterface::class,
-    RickAndMortyRepository::class
-);
-
-// OPCIÓN B — Lee desde MySQL (requiere haber ejecutado migrate + characters:sync antes)
-$this->app->bind(
-    CharacterRepositoryInterface::class,
-    MysqlCharacterRepository::class
-);
-
-// OPCIÓN C (ACTIVA AHORA) — Lee desde MongoDB
-$this->app->bind(
-    CharacterRepositoryInterface::class,
-    MongoCharacterRepository::class
-);
+```json
+{
+    "meta": { "source": "mongo" },
+    "error": {
+        "message": "Unexpected error",
+        "details": "Connection refused mongodb://localhost:27017"
+    }
+}
 ```
 
-El Controller, el UseCase, la Entidad — **nada más cambia**.
+---
 
-> **Flujo típico de uso:**
->
-> 1. Ejecutas `php artisan characters:sync` → la API de Rick & Morty se descarga a MongoDB.
-> 2. El binding está en `MongoCharacterRepository` (como está ahora).
-> 3. Tu API sirve datos desde tu propia base de datos: más rápido, funciona offline, puedes filtrar y modificar.
-> 4. Si mañana quieres pasar a MySQL: cambias el binding, corres el sync de nuevo. Listo.
+## 11. Comandos de referencia
 
-Después de cualquier cambio en el Provider, limpia la cache:
+### Desarrollo diario
+
+| Comando                             | Qué hace                                    |
+| ----------------------------------- | ------------------------------------------- |
+| `php artisan serve`                 | Levanta servidor en `http://localhost:8000` |
+| `php artisan migrate`               | Ejecuta migraciones pendientes (solo MySQL) |
+| `php artisan migrate:fresh`         | Borra todas las tablas y re-migra           |
+| `php artisan migrate:rollback`      | Deshace la última migración                 |
+| `php artisan migrate:status`        | Muestra estado de cada migración            |
+| `php artisan characters:sync`       | Sincroniza personajes hacia el motor activo |
+| `php artisan route:list --path=api` | Lista rutas de la API                       |
+| `php artisan optimize:clear`        | Limpia TODA la cache de una vez             |
+| `composer dump-autoload`            | Regenera el mapa de clases                  |
+| `php artisan tinker`                | REPL interactivo                            |
+| `php artisan pail`                  | Logs en tiempo real                         |
+| `php artisan about`                 | Info general del proyecto                   |
+
+### Generadores `make:`
+
+| Comando                                                    | Crea                         |
+| ---------------------------------------------------------- | ---------------------------- |
+| `php artisan make:controller NombreController --invokable` | Controller de un solo método |
+| `php artisan make:migration nombre_migracion`              | Archivo de migración         |
+| `php artisan make:provider NombreProvider`                 | Service Provider             |
+| `php artisan make:command NombreCommand`                   | Comando Artisan              |
+| `php artisan make:resource NombreResource`                 | API Resource                 |
+| `php artisan make:request NombreRequest`                   | Form Request (validación)    |
+| `php artisan make:interface Ruta/Nombre`                   | Interfaz PHP                 |
+| `php artisan make:class Ruta/Nombre`                       | Clase PHP simple             |
+| `php artisan make:test NombreTest --unit`                  | Test unitario                |
+
+### Debugging
 
 ```bash
-php artisan optimize:clear
-composer dump-autoload
+# Verificar qué implementación está activa
+php artisan tinker
+>>> app(App\Domain\Characters\Contracts\CharacterQueryRepository::class)
+
+# Ver qué valor tiene DB_SOURCE
+php artisan tinker
+>>> config('database.character_source')
+
+# Ver logs en tiempo real
+php artisan pail
 ```
 
 ---
 
 ## 12. Principios SOLID aplicados
 
-| Principio                     | Cómo se aplica en este proyecto                                                                                                                   |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **S** — Single Responsibility | `CharacterController` solo maneja HTTP. `GetCharactersUseCase` solo ejecuta lógica. `MongoCharacterRepository` solo persiste en Mongo.            |
-| **O** — Open/Closed           | Se agregó `MongoCharacterRepository` sin modificar el UseCase ni el Controller. El sistema estaba abierto a extensión y cerrado a modificación.   |
-| **L** — Liskov Substitution   | `RickAndMortyRepository`, `MysqlCharacterRepository` y `MongoCharacterRepository` son intercambiables porque todos implementan la misma interfaz. |
-| **I** — Interface Segregation | La interfaz solo tiene `findAll()` y `save()`. No fuerza métodos que no todos los adaptadores necesiten.                                          |
-| **D** — Dependency Inversion  | `GetCharactersUseCase` depende de la interfaz, no de implementaciones concretas. El `RepositoryServiceProvider` resuelve cuál usar en runtime.    |
+| Principio                     | Cómo se aplica                                                                                                        |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **S** — Single Responsibility | Cada clase tiene una sola razón para cambiar. Controller = HTTP. UseCase = lógica. Repositorios = persistencia.       |
+| **O** — Open/Closed           | Puedes agregar `PostgresCharacterRepository` sin modificar nada existente.                                            |
+| **L** — Liskov Substitution   | `MysqlCharacterRepository` y `MongoCharacterRepository` son intercambiables porque implementan las mismas interfaces. |
+| **I** — Interface Segregation | CQRS separa lectura de escritura. `RickAndMortyRepository` solo implementa la que necesita.                           |
+| **D** — Dependency Inversion  | Todo depende de interfaces del dominio. El `RepositoryServiceProvider` resuelve implementaciones en runtime.          |
 
 ---
 
-## 13. Qué sigue
+## 13. Errores comunes
 
-### Nuevos casos de uso
-
-```bash
-php artisan make:class Application/GetCharacters/GetCharacterByIdUseCase
-```
-
-```php
-// Agregar el método al puerto
-interface CharacterRepositoryInterface
-{
-    public function findAll(): array;
-    public function save(Character $character): void;
-    public function findById(int $id): ?Character;        // nuevo
-    public function findByStatus(string $status): array;  // nuevo
-}
-```
-
-### Value Objects en el Dominio
-
-```php
-// En lugar de: public string $status
-// Crear un Value Object que valide en construcción:
-class CharacterStatus
-{
-    private const VALID = ['Alive', 'Dead', 'unknown'];
-
-    public function __construct(public readonly string $value)
-    {
-        if (!in_array($value, self::VALID)) {
-            throw new \InvalidArgumentException("Status inválido: {$value}");
-        }
-    }
-}
-```
-
-### API Resources para controlar la respuesta JSON
-
-```bash
-php artisan make:resource CharacterResource
-```
-
-```php
-// En CharacterController:
-return CharacterResource::collection($characters);
-```
-
-### Tests
-
-```bash
-php artisan make:test GetCharactersUseCaseTest --unit
-php artisan test
-php artisan test --coverage
-```
+| Error                                    | Solución                                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| `Target [Interface] is not instantiable` | `RepositoryServiceProvider` no registrado en `bootstrap/providers.php`              |
+| `Class not found`                        | Namespace incorrecto o falta `composer dump-autoload`                               |
+| `404 en /api/characters`                 | Falta ejecutar `php artisan install:api` (Laravel 12)                               |
+| `SQLSTATE: No such table`                | Falta ejecutar `php artisan migrate`                                                |
+| `ext-mongodb missing`                    | Instalar `php_mongodb.dll` en `C:\xampp\php\ext\` y activar en `php.ini`            |
+| `Connection refused mongodb`             | MongoDB no está corriendo. Inícialo o cambia a `DB_SOURCE=mysql`                    |
+| `Invalid DB_SOURCE`                      | El valor en `.env` no es `mysql` ni `mongo`                                         |
+| `RickAndMortyRepository is read-only`    | Estás llamando `save()` en el adaptador de API. Solo MySQL y Mongo pueden escribir. |
+| Cambio de `DB_SOURCE` no surte efecto    | Ejecuta `php artisan optimize:clear`                                                |
+| `500` sin detalle en respuesta           | Activa `APP_DEBUG=true` en `.env` para ver el mensaje real                          |
 
 ---
 
-## 14. Errores comunes
-
-| Error                                        | Solución                                                                                    |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `Target [Interface] is not instantiable`     | `RepositoryServiceProvider` no está registrado en `bootstrap/providers.php`                 |
-| `Class not found`                            | El namespace no coincide con la ruta de carpetas. Ejecuta `composer dump-autoload`          |
-| `SQLSTATE: No such table`                    | No ejecutaste `php artisan migrate`                                                         |
-| `404 en /api/characters`                     | No ejecutaste `php artisan install:api` (Laravel 12)                                        |
-| `SSL certificate error`                      | Usa `Http::withoutVerifying()` en desarrollo local (ya implementado)                        |
-| `500 Internal Server Error`                  | Revisa `storage/logs/laravel.log` para ver el error real                                    |
-| Cambio en Provider no surte efecto           | Ejecuta `php artisan optimize:clear` y `composer dump-autoload`                             |
-| `Connection refused` (MongoDB)               | El servicio de MongoDB no está corriendo. Inícialo desde los servicios de Windows o consola |
-| `Class "MongoDB\Driver\Manager" not found`   | El driver `mongodb` no está habilitado en `php.ini`                                         |
-| `Call to undefined method collection()`      | Usa `table()` en lugar de `collection()` — es el método estándar compatible con el driver   |
-| `No se encontraron personajes` al hacer sync | La API de Rick & Morty no respondió. Verifica tu conexión a internet                        |
-
-> **Tip:** el archivo `storage/logs/laravel.log` contiene todos los errores. También puedes usar `php artisan pail` para verlos en tiempo real, o agregar `dd($variable)` temporalmente para inspeccionar valores.
-
----
-
-## 15. .gitignore recomendado
+## 14. .gitignore recomendado
 
 ```gitignore
 # Dependencias
@@ -927,60 +903,48 @@ php artisan test --coverage
 *.DS_Store
 Thumbs.db
 
+# Scripts de exportación/utilidad local
+export_code.ps1
+estructura_codigo.txt
+
 # Testing
 .phpunit.result.cache
 /coverage/
 ```
 
-### Cómo agregar algo al .gitignore
+### Quitar un archivo ya subido a git
 
-```gitignore
-# Archivo específico
-secreto.txt
-
-# Extensión (cualquier archivo)
-*.log
-*.zip
-
-# Carpeta en la raíz del proyecto
-/exports/
-
-# Carpeta en cualquier nivel
-logs/
-
-# Archivo dentro de una carpeta específica
-storage/app/private/config.json
+```bash
+git rm --cached nombre-del-archivo
+git rm --cached -r nombre-de-carpeta/
+git commit -m "chore: remove unnecessary files and add to gitignore"
+git push
 ```
 
-> **Importante:** si ya subiste un archivo antes de agregarlo al `.gitignore`, git lo sigue rastreando. Debes quitarlo del índice sin borrarlo del disco:
->
-> ```bash
-> git rm --cached nombre-del-archivo
-> git rm --cached -r nombre-de-carpeta/
-> ```
+---
+
+## 15. Glosario
+
+| Término                       | Definición                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| **DDD**                       | Domain-Driven Design. Organiza el código alrededor del dominio de negocio.          |
+| **Arquitectura Hexagonal**    | Aísla el núcleo de la app de sus puertos de entrada/salida.                         |
+| **CQRS**                      | Command Query Responsibility Segregation. Separa interfaces de lectura y escritura. |
+| **Entidad**                   | Objeto con identidad única. `Character` tiene un `id` que lo identifica.            |
+| **Puerto (Port)**             | Interfaz del dominio que define un contrato.                                        |
+| **Adaptador (Adapter)**       | Implementación concreta de un puerto.                                               |
+| **Caso de Uso**               | Clase que orquesta una operación de negocio.                                        |
+| **Service Provider**          | Clase de Laravel que registra bindings en el contenedor de dependencias.            |
+| **Singleton**                 | Binding donde Laravel crea solo una instancia y la reutiliza.                       |
+| **Binding**                   | Registro que dice "cuando pidan X, entrega Y".                                      |
+| **Inyección de Dependencias** | Las dependencias se reciben en el constructor, no se instancian dentro.             |
+| **Inmutabilidad**             | Un objeto `readonly` no puede cambiar después de crearse.                           |
+| **Mapper**                    | Método que transforma entre representaciones: `toDomain()` y `toPersistence()`.     |
+| **Hidratación**               | Convertir datos crudos (array/stdClass) en objetos del dominio.                     |
+| **Upsert**                    | Operación de BD: actualiza si existe, inserta si no (`updateOrInsert`).             |
+| **Fail Fast**                 | Detectar y lanzar errores lo antes posible en lugar de silenciarlos.                |
+| **API Resource**              | Clase de Laravel que controla la forma exacta del JSON de respuesta.                |
 
 ---
 
-## 16. Glosario
-
-| Término                       | Definición                                                                                    |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
-| **DDD**                       | Domain-Driven Design. Filosofía de organización del código centrada en el dominio de negocio. |
-| **Arquitectura Hexagonal**    | Patrón que aísla el núcleo de la app de sus puertos de entrada/salida.                        |
-| **Entidad**                   | Objeto con identidad única y ciclo de vida. `Character` tiene un ID que lo identifica.        |
-| **Value Object**              | Objeto sin identidad, definido por sus atributos. Ej: `CharacterStatus("Alive")`.             |
-| **Puerto (Port)**             | Interfaz que define un contrato de comunicación. Ej: `CharacterRepositoryInterface`.          |
-| **Adaptador (Adapter)**       | Implementación concreta de un puerto. Ej: `MongoCharacterRepository`.                         |
-| **Caso de Uso**               | Clase que orquesta la lógica de una operación específica. Ej: `GetCharactersUseCase`.         |
-| **Service Provider**          | Clase de Laravel que registra bindings en el contenedor de dependencias.                      |
-| **Inyección de Dependencias** | Patrón donde las dependencias se pasan al constructor en lugar de instanciarse dentro.        |
-| **Contenedor IoC**            | El "cerebro" de Laravel que resuelve automáticamente las dependencias.                        |
-| **Binding**                   | Registro en el contenedor que dice "cuando pidan X, da Y".                                    |
-| **Inmutabilidad**             | Propiedad de un objeto que no puede cambiar después de ser creado (`readonly`).               |
-| **Upsert**                    | Operación de BD: actualiza si existe, inserta si no existe (`updateOrInsert`).                |
-| **Hidratación**               | Proceso de convertir datos crudos (array/stdClass) en objetos del dominio.                    |
-| **Colección**                 | Equivalente de "tabla" en MongoDB. En Laravel se accede con `table()` via el driver Mongo.    |
-
----
-
-_Laravel 12 · PHP 8.2 · DDD · Arquitectura Hexagonal · Rick & Morty API · MongoDB_
+_Laravel 12 · PHP 8.2 · DDD · Arquitectura Hexagonal · CQRS · MySQL · MongoDB · Rick & Morty API_
